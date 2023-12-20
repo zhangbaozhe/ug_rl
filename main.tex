@@ -20,7 +20,7 @@
 \usepackage{graphicx}
 \usepackage{hyperref}       % hyperlinks
 \usepackage[ruled,vlined]{algorithm2e}
-\usepackage[style=authoryear,backend=biber]{biblatex}
+\usepackage[style=authoryear,backend=bibtex]{biblatex}
 \addbibresource{main.bib}
 
 \newcommand{\B}[1]{\mathbf{#1}}
@@ -309,6 +309,65 @@ and the goal is to maximize $G = \max \mathbb{E}\left[G_1 \right]$.
 %   \caption{Asynchronous NAF - N collector threads and 1 trainer thread}\label{algo:AsyncNAF}
 % \end{algorithm}
 
+Before diving into the recent work about RL in motion planning and 
+control, we may first investigate this work proposed by 
+\textcite{roy2002motion} on mobile robots.
+In this early work, the motion planning method for the ground mobile robot 
+generates a complete plan in the full state space of the robot, including orientation and velocity. 
+It begins with an intermediate plan in a low-dimensional discrete space, using dynamic programming over a value function, and then projects this plan to the full state space. The plan is then refined through gradient ascent to increase the expected reward.
+The state is defined as $\B{x}_t = \left[ x, y, \theta, v^t, v^r\right]^\top$ representing the $x$ and $y$ coordinates, orientation, linear 
+and rotational velocities, respectively.
+The action of this work is defined as $\B{u}_t = \left[ \Delta v^t, \Delta v^r \right]$.
+The policy desired of this method is defined as a series 
+of waypoints $\pi(\B{x}_i) = \left[ \B{w}_1, \dots, \B{w}_n\right]^\top$.
+The value function in the matrix-vector form is defined as 
+\[
+  V(\pi_n) = \int_{t=0}^{T} G(\B{x}_t) R(\B{x}_t) dt 
+           = \sum_{j=0}^{n-1} \int_{\B{x}(\B{w}_j)}^{\B{x}(\B{w}_{j+1})} G(\B{x}) R(\B{x}) dx 
+\]
+where $G(\cdot)$ is the state-transition matrix (this method
+is model-based).
+The algorithm for this method generating a series of waypoints is listed as follows:
+\begin{algorithm}[h]
+  \caption{Motion planning through policy search}
+  \label{algo:roy2002}
+
+  Use value iteration to run the dynamic program and extract a policy from 2-dimensional value function \\
+
+  Determine the maximum likelihood trajectory and convert to a set of 5-dimensional waypoints to form the expected path. \\
+
+  \While{$\neg$ converged}
+  {
+    \ForEach{Waypoint $\B{w}_j$}
+    {
+      Determine value contribution of trajectory from previous waypoint $\B{w}_{j-1}$ to next waypoint $\B{w}_{j+1}$ \\
+      Measure gradient at endpoints \\
+      Move waypoint $\B{w}_j$ along gradient until path segment value increases \\
+    }
+
+    Find lowest immediate reward along the trajectory \\
+    Insert a new waypoint
+  }
+\end{algorithm}
+This method, though a good attempt utilizing the core idea from RL to motion planning, 
+is constrained by the complex definitions and framework, making
+it not common and practical for quadrotor planning and control.
+Besides, the generated waypoint-like path is not continuous nor 
+kinodynamically feasible for high-speed vehicle such as quadrotors.
+
+Control methods such as model prediction control (MPC) need
+explicit and accurate state estimations of the robot.
+RL can release the agent from the strict constraint and 
+directly map the raw sensor data to control inputs to the agent.
+In the work of \textcite{zhang2016learning}, the authors propose to combine MPC with RL in the framework of guided policy search, where MPC is used to generate data at training time, under full state observations provided by an instrumented training environment.
+TODO: 
+
+
+RL is utilized to directly control the quadrotor in \textcite{hwangbo2017control}.
+This RL approach eliminates the need for predefined control structures, typically required in more traditional methods. 
+Their new learning algorithm, which they claim is more suitable for quadrotor control than existing ones, is both conservative and stable for complex tasks. 
+Their proposed approach is built on deterministic policy optimization using natural gradient descent.
+TODO: 
 
 
 \printbibliography
