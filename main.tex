@@ -19,7 +19,7 @@
 \usepackage{xcolor}         % colors
 \usepackage{graphicx}
 \usepackage{hyperref}       % hyperlinks
-\usepackage[ruled,vlined]{algorithm2e}
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
 \usepackage[style=authoryear,backend=bibtex]{biblatex}
 \addbibresource{main.bib}
 
@@ -239,7 +239,7 @@ the reward function $r(\B{x}_t, \B{u}_t)$,
 the initial state distribution $p(\B{x}_1)$, 
 the transition probability $p(\B{x}_{t+1} | \B{x}_t, \B{u}_t)$, 
 the policy $\pi(\B{u}_t | \B{x}_t)$, 
-the return $G_t = \sum_{i=t}^T\gamma^{i-t}r(\B{x}_i, \B{u}_i)$ where $\gamma \in \left(0,1\right)$ is the discount factor, 
+the return $G_t = \sum_{i=t}^T\gamma^{i-t}r(\B{x}_i, \B{u}_i)$ where $\gamma \in \left(0,1\right]$ is the discount factor, 
 the value function $V(\B{x}_t) = \mathbb{E}\left[G_t | \B{x}_t\right]$, 
 the action-value function $Q(\B{x}_t, \B{u}_t) = \mathbb{E}\left[G_t | \B{x}_t, \B{u}_t\right]$, 
 and the goal is to maximize $G = \max \mathbb{E}\left[G_1 \right]$.
@@ -310,7 +310,7 @@ and the goal is to maximize $G = \max \mathbb{E}\left[G_1 \right]$.
 % \end{algorithm}
 
 Before diving into the recent work about RL in motion planning and 
-control, we may first investigate this work proposed by 
+control for quadrotors, we may first investigate this work proposed by 
 \textcite{roy2002motion} on mobile robots.
 In this early work, the motion planning method for the ground mobile robot 
 generates a complete plan in the full state space of the robot, including orientation and velocity. 
@@ -327,7 +327,7 @@ The value function in the matrix-vector form is defined as
 \]
 where $G(\cdot)$ is the state-transition matrix (this method
 is model-based).
-The algorithm for this method generating a series of waypoints is listed as follows:
+The algorithm for this method generating a series of waypoints is listed as in Algo.~\ref{algo:roy2002}.
 \begin{algorithm}[h]
   \caption{Motion planning through policy search}
   \label{algo:roy2002}
@@ -359,16 +359,71 @@ Control methods such as model prediction control (MPC) need
 explicit and accurate state estimations of the robot.
 RL can release the agent from the strict constraint and 
 directly map the raw sensor data to control inputs to the agent.
-In the work of \textcite{zhang2016learning}, the authors propose to combine MPC with RL in the framework of guided policy search, where MPC is used to generate data at training time, under full state observations provided by an instrumented training environment.
-TODO: 
+In the work of \textcite{zhang2016learning}, the authors propose to combine MPC with RL in the framework of guided policy search (GPS), where MPC is used to generate data at training time, under full state observations provided by an instrumented training environment.
+Unlike common policy-gradient RL algorithms, the proposed GPS 
+method uses a variant of differential dynamic programming (DDP), iterative
+linear gaussian control (iLQG), usually applied in optimal 
+control. 
+The iLQG method is set as the guide to let the policy 
+away from poor local minimal.
+The general MPC-based GPS algorithm is illustrated in Algo.~\ref{algo:general_gps}, where $\tau = \left\{ \B{x}_1, \B{u}_1, \dots, \B{x}_T, \B{u}_T\right\}$ denotes the trajectory, 
+$p(\tau) = p(\B{x}_1)\prod_{t=1}^{T}p(\B{x}_{t+1} | \B{x}_t, \B{u}_t)
+\pi_\theta(\B{u}_t | \B{x}_t)$, 
+$l(\tau) = \sum_{t=1}^T l(\B{x}_t, \B{u}_t)$, and 
+$\pi_\theta(\B{u}_t | \B{x}_t) = \int \pi_\theta(\B{u}_t | \B{o}_t) p(\B{o}_t | \B{x}_t)d\B{o}_t$ 
+($\B{o}_t$ is the observation).
+Note that in this algorithm, the iLQG needs to know the approximate system
+model of the quadrotor, so as to generate suitable guidance trajectories.
+The non-linear policy $\pi_\theta(\B{u}_t | \B{o}_t)$ is trained 
+using supervised learning from the samples collected via MPC.
+With the assumption that the policy is Gaussian, i.e., 
+$\pi_\theta(\B{u}_t | \B{o}_t) = \mathcal{N}(\mu^\pi(\B{o}_t), 
+\Sigma^\pi(\B{o}_t))$, the training objective is the KL-divergence
+\[
+  \begin{aligned}
+    D_\text{KL} & (
+      \pi_\theta(\B{u}_t | \B{o}_t^{i,j} || 
+      \tilde{p}_{i,j}(\B{u}_t | \B{x}_t^{i,j})) = \\
+      &\frac{1}{2} (\mu^\pi(\B{o}_t) - \tilde{g}_{tij}(\B{x}_t))^\top
+      \tilde{Q}_{\B{u},\B{u},tij}
+      (\mu^\pi(\B{o}_t) - \tilde{g}_{tij}(\B{x}_t)) \\
+      & -\frac{1}{2}\text{tr}\left[
+        \tilde{Q}_{\B{u},\B{u},tij}\Sigma^\pi(\B{o}_t)
+      \right]
+      + \frac{1}{2}\log{\lvert \Sigma^\pi(\B{o}_t) \rvert}
+      + \lambda^\top_{\mu,t}\mu^\pi(\B{o}_t)
+  \end{aligned}
+\]
+where $\tilde{g}$ is the feedback control policy from iLQG.
+
+In the experiments of \textcite{zhang2016learning}, the true state 
+of the agent is 
+
+\begin{algorithm}[h]
+  \caption{Generic guided policy search summary}
+  \label{algo:general_gps}
+  \For{iteration i = 1 to K}
+  {
+    Optimize trajectory distributions $p_i(\tau)$ to minimize 
+    $\mathbb{E}_{p_i}\left[l(\tau)\right]$ and deviation from 
+    the policy $\pi_\theta(\B{u}_t | \B{o}_t)$ \\
+    Generate samples $\left\{ \tau_i^j \right\}$ from each $p_i(\tau)$ \\
+    Tain non-linear policy $\pi_\theta(\B{u}_t | \B{o}_t)$ to
+    match the sampled trajectories $\left\{ \tau_i^j \right\}$ \\
+    Update Lagrange multipliers to encourage agreement between
+    $p_i(\B{u}_t | \B{x}_t)$ and $\pi_\theta(\B{u}_t | \B{x}_t)$
+  }
+\end{algorithm}
+
 
 
 RL is utilized to directly control the quadrotor in \textcite{hwangbo2017control}.
 This RL approach eliminates the need for predefined control structures, typically required in more traditional methods. 
 Their new learning algorithm, which they claim is more suitable for quadrotor control than existing ones, is both conservative and stable for complex tasks. 
 Their proposed approach is built on deterministic policy optimization using natural gradient descent.
-TODO: 
+Following an actor-critic fashion, the proposed method consists of a value and a policy network.
 
+\section{Discussions and Conclusion}
 
 \printbibliography
 
