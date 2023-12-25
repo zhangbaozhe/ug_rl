@@ -78,8 +78,9 @@ Learning for Motion Planning \& Control of Unmanned Aerial Vehicles}
 
 
 \begin{abstract}
-  TODO: Focus on the motion planning and control for quadrotors, 
-  analyze 10 papers carefully
+  This survey explores Deep Reinforcement Learning (DRL) in motion planning and control for Unmanned Aerial Vehicles (UAVs). Traditional methods have been the backbone of UAV control and planning, offering precise mathematical models for dynamics and trajectory generation. However, their model-driven nature often results in sub-optimal performance in the stochastic, real-world environment, especially in complex tasks like high-speed drone racing.
+  In contrast, DRL, known for its data-driven approach, excels in learning from vast amounts of data and adapting to dynamic environments. This survey highlights key works that demonstrate DRL's ability to overcome limitations of traditional methods, offering unified, scalable, and generalizable frameworks for UAV motion planning and control. 
+  The fusion of traditional methods with the data-rich capabilities of DRL is proposed as a future direction, promising to yield more robust and versatile UAV systems.
 \end{abstract}
 
 
@@ -107,10 +108,10 @@ Many complete systems with simultaneous localization
 and mapping (SLAM) and hierarchical 
 planning and control frameworks can achieve outstanding 
 autonomy.
-For example, {\color{red} \textcite{zhou2019robust}} propose a robust and efficient 
+For example, {\textcite{zhou2019robust}} propose a robust and efficient 
 quadrotor motion planning system for fast flight in 
 three-dimensional complex environments.
-{\color{red} \textcite{quan2023robust}} introduce a distributed motion planning 
+{\textcite{quan2023robust}} introduce a distributed motion planning 
 trajectory optimization framework for large-scale quadrotor 
 formation flight in dense environments.
 Although traditional methods can achieve impressive performance, 
@@ -328,7 +329,7 @@ The value function in the matrix-vector form is defined as
 where $G(\cdot)$ is the state-transition matrix (this method
 is model-based).
 The algorithm for this method generating a series of waypoints is listed as in Algo.~\ref{algo:roy2002}.
-\begin{algorithm}[h]
+\begin{algorithm}
   \caption{Motion planning through policy search}
   \label{algo:roy2002}
 
@@ -359,7 +360,23 @@ Control methods such as model prediction control (MPC) need
 explicit and accurate state estimations of the robot.
 RL can release the agent from the strict constraint and 
 directly map the raw sensor data to control inputs to the agent.
-In the work of \textcite{zhang2016learning}, the authors propose to combine MPC with RL in the framework of guided policy search (GPS), where MPC is used to generate data at training time, under full state observations provided by an instrumented training environment.
+In the work of \textcite{zhang2016learning}, 
+\begin{algorithm}
+  \caption{Generic guided policy search summary}
+  \label{algo:general_gps}
+  \For{iteration i = 1 to K}
+  {
+    Optimize trajectory distributions $p_i(\tau)$ to minimize 
+    $\mathbb{E}_{p_i}\left[l(\tau)\right]$ and deviation from 
+    the policy $\pi_\theta(\B{u}_t | \B{o}_t)$ \\
+    Generate samples $\left\{ \tau_i^j \right\}$ from each $p_i(\tau)$ \\
+    Tain non-linear policy $\pi_\theta(\B{u}_t | \B{o}_t)$ to
+    match the sampled trajectories $\left\{ \tau_i^j \right\}$ \\
+    Update Lagrange multipliers to encourage agreement between
+    $p_i(\B{u}_t | \B{x}_t)$ and $\pi_\theta(\B{u}_t | \B{x}_t)$
+  }
+\end{algorithm}
+the authors propose to combine MPC with RL in the framework of guided policy search (GPS), where MPC is used to generate data at training time, under full state observations provided by an instrumented training environment.
 Unlike common policy-gradient RL algorithms, the proposed GPS 
 method uses a variant of differential dynamic programming (DDP), iterative
 linear gaussian control (iLQG), usually applied in optimal 
@@ -397,33 +414,193 @@ $\pi_\theta(\B{u}_t | \B{o}_t) = \mathcal{N}(\mu^\pi(\B{o}_t),
 where $\tilde{g}$ is the feedback control policy from iLQG.
 
 In the experiments of \textcite{zhang2016learning}, the true state 
-of the agent is 
+of the agent is $\B{x}_t = \left[ \B{p}_t, \B{v}_t, \B{q}_t, \boldsymbol{\omega}_t \right]^\top \in \mathbb{R}^{13}$.
+The control input (action) $\B{u}_t \in \mathbb{R}^4$ is the 
+rotor speed of the vehicle.
+The observation model is $\B{o}_t = \left[ 
+  \B{r}_t, \B{v}_t, \B{q}_t, \boldsymbol{\omega}_t 
+\right] \in \mathbb{R}^{40}$  without the position $\B{p}_t$
+instead including the reading $\B{r}_t$ from a set of 30 
+equally spaced laser rangefinders with max range 5m arranged
+in 180 degree fan in front of the vehicle.
+Their experiments in the simulation show promising results 
+for the quadrotor to perform simple object avoidance.
+However, the demonstration shows significant input oscillations 
+which make the quadrotor control not smooth.
 
-\begin{algorithm}[h]
-  \caption{Generic guided policy search summary}
-  \label{algo:general_gps}
-  \For{iteration i = 1 to K}
+
+In the guided policy search work \parencite{zhang2016learning}, 
+there is a prior approximate quadrotor dynamics model for the 
+MPC to generate guided trajectories.
+The approach of \cite{hwangbo2017control} eliminates the need for predefined control structures, typically required in more traditional methods. 
+Their new learning algorithm, which they claim is more suitable for quadrotor control than existing ones, is both conservative and stable for complex tasks. 
+Their proposed approach is built on deterministic policy optimization using natural gradient descent adopted from trusted region policy optimization (TRPO).
+The exploration strategy in the proposed method includes three types of 
+trajectories: initial trajectories, junction trajectories and branch trajectories. The initial and branch trajectories are on-policy and the junction trajectories are off-policy generated with an additive Gaussian noise with covariance $\Sigma$. The branch trajectories are on-policy trajectories starting from some state along the junction trajectories.
+Following an actor-critic fashion, the proposed method consists of a value and a policy network.
+The value network is trained using Monte-Carlo samples 
+obtained from on-policy trajectories, 
+while the policy optimization utilizes both on-policy and 
+off-policy trajectories.
+The policy is trained as in Algo.~\ref{algo:policy_optimization} 
+(superscripts $p$ and $f$ mean on-policy and off-policy, respectively).
+\begin{algorithm}
+  \caption{Policy optimization}
+  \label{algo:policy_optimization}
+  Give initial parameters of $V(\B{x} | \eta)$ and $\pi(\B{x} | \theta)$ \\
+  \While{j = 1, 2, 3, $\dots$ until convergence}
   {
-    Optimize trajectory distributions $p_i(\tau)$ to minimize 
-    $\mathbb{E}_{p_i}\left[l(\tau)\right]$ and deviation from 
-    the policy $\pi_\theta(\B{u}_t | \B{o}_t)$ \\
-    Generate samples $\left\{ \tau_i^j \right\}$ from each $p_i(\tau)$ \\
-    Tain non-linear policy $\pi_\theta(\B{u}_t | \B{o}_t)$ to
-    match the sampled trajectories $\left\{ \tau_i^j \right\}$ \\
-    Update Lagrange multipliers to encourage agreement between
-    $p_i(\B{u}_t | \B{x}_t)$ and $\pi_\theta(\B{u}_t | \B{x}_t)$
+    Collect data using the three trajectories \\
+    Compute the MC estimate of the value function:
+    \[
+      v_i = \sum_{t=i}^{T-1}\gamma^{t-i}r_t^p + \gamma^{T-i}V(\B{x}_T | \eta)
+    \] \\
+    Update $V(\B{x} | \eta)$ using Huber loss \\
+    Update $\pi(\B{x} | \theta)$ using junction pairs (indexed with $k$) and natural gradient descent: 
+    \[
+      \begin{aligned}
+        &&A^\pi(\B{x}_i, \B{u}_i^f) = r_i^f + \gamma v_{i+1}^f - v_i^p \\
+        &&\bar{L}(\theta) = \sum_{k=0}^K A^\pi(\B{x}_k, \pi(\B{x}_k | \theta)) \\
+        &&\theta_{j+1} \leftarrow  \theta_j - \frac{\alpha}{K}\sum_{k=0}^K n_k \\
+        &\text{s.t.}&(\alpha n_k)^\top D_{\theta \theta}(\alpha n_k) < \delta, \forall k \\
+        &&D_{\theta \theta} n_k = g_k
+      \end{aligned}
+    \]
   }
 \end{algorithm}
+The main task for the proposed method is to achieve stable waypoint
+tracking.
+During the operation, the input of the policy the subtracted 
+by the waypoint location.
+They also add a proportional and derivative (PD) controller 
+\[
+  \boldsymbol{\tau}_b = \B{k}_p  \B{R}^\top \B{q} + 
+  \B{k}_d  \B{R}^\top\boldsymbol{\omega}
+\]
+for the attitude along with the learning policy, 
+where $\boldsymbol{\tau}_b$ is the virtual torque on the main 
+body, $\B{q}$ and $\B{R}$ are the orientation of the quadrotor in Euler
+vector and rotation matrix forms respectively, and $\boldsymbol{\omega}$
+is the angular velocity.
+The sum of the PD controller and the learned policy is used 
+as the command.
+The reward function is defined as 
+\[
+  r_t = 4\times 10^{-3} \lVert \B{p}_t \rVert  + 
+    2 \times 10^{-4} \lVert \B{a}_t \rVert + 
+    3 \times 10^{-4} \lVert \boldsymbol{\omega}_t \rVert + 
+    5 \times 10^{-4} \lVert \B{v}_t \rVert
+\]
+In the experiments, they perform both simulations and real-world
+experiments. The trained policy shows great performance and 
+remains computationally cheap at the same time. 
+The computation time of evaluating the policy is only 7 $\mu$s
+per time step, which is two orders of magnitude less than common
+trajectory optimization algorithms with an approximate model.
+
+Autonomous drone racing is a popular robotics task for the 
+quadrotor traveling through a set of waypoints as fast as possible. 
+\textcite{song2021autonomous} propose an approach
+using deep reinforcement learning to train the quadrotor 
+traversing aggressively between gates in the drone racing task.
+The main contribution of this work is the novel reward settings 
+and the randomization techniques used for training.
+To fast and safely travel through gates, the reward function is divided into
+two main parts: the progress part and the safety part.
+The progress reward is a positive reward for the quadrotor to pass
+the gates.
+The position of the quadrotor is projected onto the current line 
+segment between the previous gate and the next gate to be passed.
+Given the current position $\B{p}_c(t)$ and the previous position 
+$\B{p}_c(t-1)$ of the quadrotor, the progress reward $r_{{p}}(t)$is defined as 
+\[
+  r_{{p}}(t) = s(\B{p}_c(t)) - s(\B{p}_c(t-1))
+\]
+where $s({p}) = (\B{p} - \B{g}_1) \cdot (\B{g}_2 - \B{g}_1) / \lVert (\B{g}_2 - \B{g}_1) \rVert$ defining the progress along the path
+segment that connects the previous gate's position $\B{g}_1$ 
+with the next gate's position $\B{g}_2$.
+The safety reward is defined as: 
+\[
+  r_{s} = - f^2 \cdot \left(
+    1 - \exp\left(- \frac{d_n^2}{2v}\right)
+  \right)
+\]
+where $f = \max\left[1 - (d_p / d_{\max}), 0.0\right]$
+and $v = \max\left[ (1-f)\cdot(w_g/6), 0.05 \right]$.
+Here, $d_n$ and $d_p$ denote the distance of the quadrotor 
+to the gate normal and the distance to the gate plane respectively.
+The final reward ad each time step $t$ is 
+\[
+  r(t) = r_{p}(t) + a \cdot r_s(t) - b \cdot \lVert \boldsymbol{\omega} \rVert^2 + 
+  \begin{cases}
+    r_T & \text{if gate collision} \\
+    0 & \text{else}
+  \end{cases}
+\]
+where $r_T$ is a terminal reward for penalizing the gate collisions
+$r_T = -\min\left[\left(\frac{d_g}{w_g}\right)^2, 20.0\right]$
+with $d_g$ and $w_g$ denoting the euclidean distance from the 
+position of the crash to the gate center and the side length 
+of the rectangular gate, respectively.
+The observation space is divided into two main components, including 
+the quadrotor's state $\B{x}_t^{\text{quad}}$ and the tracking information
+$\B{x}_t^{\text{track}}$.
+The quadrotor state is 
+\[\B{x}_t^{\text{quad}} = \left[
+  \B{v}_{WB,t}, \;
+  \dot{\B{V}}_{WB,t}, \;
+  \B{R}_{WB,t}, \;
+  \boldsymbol{\omega}_{B,t}
+\right] \in \mathbb{R}^{18}
+\]
+The track observation vector $\B{x}_t^{\text{track}}$
+is defined as 
+\[
+  \B{x}_t^{\text{track}} = \left[
+    \B{o}_1, \;
+    \alpha_1, \;
+    \dots, \;
+    \B{o}_i, \;
+    \alpha, \;, 
+    \dots
+  \right], 
+  i\in\left[1,\dots,N\right]
+\]
+where $\B{o}_i \in \mathbb{R}^3$ denotes the observation for 
+gate $i$ and $N\in\mathbb{Z}^+$ is the total number of future
+gates.
+The observation for the gate use spherical coordinates 
+$\B{o}_i = \left(p_r, p_\theta, p_\phi\right)_i$.
+The angle between the gate normal and the vector pointing from the 
+quadrotor to the center of gate $i$ is denoted as $\alpha_i \in \mathbb{R}$.
+The action in this work is directly mapped to the rotor 
+thrust commands, i.e., $\B{u}_t = \left[ f_1, f_2, f_3, f_4 \right]$.
+
+In the policy training of \textcite{song2021autonomous}, the authors
+use Proximal Policy Optimization (PPO) algorithm. 
+Due to the high dimensionality of the search space, they use several techniques to accelerate the training speed:
+\begin{itemize}
+  \item Parallel Sampling Scheme: Utilizes simulation to simultaneously perform policy rollouts in up to 100 environments. This speeds up data collection and enhances the diversity of environmental interactions, allowing coverage of entire race tracks and preventing overfitting to specific track configurations.
+  \item Distributed Initialization Strategy: Addresses initial gate crashes by randomly placing quadrotors in hover states around all path segments. This strategy ensures uniform exploration of the state space and is refined as the policy improves, leading to more effective exploration.
+  \item Random Track Curriculum: Handles the increased complexity when training with randomly sampled race tracks. A track generator creates tracks of varied complexity and length. The training process adapts the complexity of tracks based on the agent's performance, starting with simpler tracks and progressing to more complex ones as the agent's ability to navigate gates improves. This approach maintains a focus on minimizing lap times in diverse track environments.
+\end{itemize}
 
 
 
-RL is utilized to directly control the quadrotor in \textcite{hwangbo2017control}.
-This RL approach eliminates the need for predefined control structures, typically required in more traditional methods. 
-Their new learning algorithm, which they claim is more suitable for quadrotor control than existing ones, is both conservative and stable for complex tasks. 
-Their proposed approach is built on deterministic policy optimization using natural gradient descent.
-Following an actor-critic fashion, the proposed method consists of a value and a policy network.
 
 \section{Discussions and Conclusion}
+
+The preceding section offers an insightful but not exhaustive overview of motion planning and control for quadrotors using reinforcement learning (RL) methods. It suggests that data-based RL methods can sometimes outperform traditional approaches.
+
+Traditional trajectory optimization and control theory have a long history, providing well-defined mathematical formulations for quadrotor dynamics and trajectory generation. However, these model-driven methods often yield sub-optimal results due to the inherent stochastic nature of the physical world and the impossibility of perfect models. Additionally, the increasing complexity of tasks, such as high-speed drone racing, poses further challenges to traditional methods.
+
+In contrast, data-driven RL methods have shown promising results in various robotics applications, contributing to the development of more versatile and robust systems. However, the author of this survey would propose two main challenges in the motion planning anc control field for RL:
+\begin{itemize}
+  \item Guaranteed Safety: Ensuring consistent safety in RL applications is a critical issue that needs addressing. 
+  \item Action Smoothness: Achieving smooth and consistent actions in RL-based control systems is another challenge that requires attention.
+\end{itemize}
+
+Many research studies demonstrate the significant potential of integrating traditional methods with RL techniques to enhance motion planning and control solutions. In the future, merging the mathematical foundations of traditional approaches with the data-driven insights of RL methods will generate more robust and effective systems.
 
 \printbibliography
 
